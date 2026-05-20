@@ -1,0 +1,56 @@
+name: Create Quiz Google Form
+
+on:
+  repository_dispatch:
+    types: [create-quiz-form]
+
+# Minimum permissions for the workflow's GITHUB_TOKEN.
+# Solo lectura del repo. No necesitamos write porque no pusheamos nada.
+permissions:
+  contents: read
+
+# Evita que dos dispatches simultaneos pisen el mismo Apps Script.
+# request_id viene del payload de Verdi y es unico por quiz.
+concurrency:
+  group: quiz-form-${{ github.event.client_payload.request_id || github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  create-form:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install clasp (pinned version)
+        run: npm install -g @google/clasp@2.4.2
+
+      - name: Restore clasp credentials from secrets
+        env:
+          CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
+          CLASP_JSON: ${{ secrets.CLASP_JSON }}
+        run: |
+          # Escribimos los archivos via node para evitar shell-quoting bugs
+          # cuando el secret contiene comillas/escapes (clave para JSON con tokens).
+          node -e "require('fs').writeFileSync(require('os').homedir() + '/.clasprc.json', process.env.CLASPRC_JSON)"
+          node -e "require('fs').writeFileSync('.clasp.json', process.env.CLASP_JSON)"
+
+      - name: Execute Apps Script createQuizFormFromJson
+        env:
+          CLIENT_PAYLOAD: ${{ toJson(github.event.client_payload) }}
+        run: |
+          # clasp run --params espera un JSON-array de argumentos.
+          # Envolvemos el client_payload en un array de un elemento.
+          PARAMS=$(node -e "console.log(JSON.stringify([process.env.CLIENT_PAYLOAD]))")
+          clasp run createQuizFormFromJson --params "$PARAMS"
+
+      - name: Cleanup credentials from runner
+        if: always()
+        run: |
+          # Defensive cleanup — el runner es ephemeral pero por las dudas
+          # removemos los archivos antes de que termine el job.
+          rm -f "$HOME/.clasprc.json" .clasp.json
