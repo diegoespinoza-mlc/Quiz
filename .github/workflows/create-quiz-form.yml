@@ -36,7 +36,11 @@ jobs:
         run: |
           # Escribimos los archivos via node para evitar shell-quoting bugs
           # cuando el secret contiene comillas/escapes (clave para JSON con tokens).
+          # IMPORTANTE: clasp v2 'run' busca .clasprc.json en el dir local, no en
+          # home. Por eso escribimos en ambos lados (home como respaldo y local
+          # para que clasp run lo encuentre).
           node -e "require('fs').writeFileSync(require('os').homedir() + '/.clasprc.json', process.env.CLASPRC_JSON)"
+          node -e "require('fs').writeFileSync('.clasprc.json', process.env.CLASPRC_JSON)"
           node -e "require('fs').writeFileSync('.clasp.json', process.env.CLASP_JSON)"
           # clasp v2 exige que exista appsscript.json local aunque la ejecucion
           # corre 100% remoto en los servers de Google. Stub minimo valido.
@@ -104,4 +108,4 @@ jobs:
         run: |
           # Defensive cleanup — el runner es ephemeral pero por las dudas
           # removemos los archivos antes de que termine el job.
-          rm -f "$HOME/.clasprc.json" .clasp.json appsscript.json
+          rm -f "$HOME/.clasprc.json" .clasprc.json .clasp.json appsscript.json
