@@ -42,6 +42,54 @@ jobs:
           # corre 100% remoto en los servers de Google. Stub minimo valido.
           echo '{"timeZone":"America/Santiago","runtimeVersion":"V8","exceptionLogging":"STACKDRIVER"}' > appsscript.json
 
+      - name: Diagnostic — verify credentials structure (no values exposed)
+        run: |
+          echo "=== File existence and size ==="
+          if [ -f "$HOME/.clasprc.json" ]; then
+            echo "~/.clasprc.json exists: yes"
+            echo "size: $(stat -c %s "$HOME/.clasprc.json") bytes"
+          else
+            echo "~/.clasprc.json: MISSING"
+          fi
+          if [ -f ".clasp.json" ]; then
+            echo ".clasp.json exists: yes"
+            echo "size: $(stat -c %s .clasp.json) bytes"
+          else
+            echo ".clasp.json: MISSING"
+          fi
+          if [ -f "appsscript.json" ]; then
+            echo "appsscript.json exists: yes"
+          else
+            echo "appsscript.json: MISSING"
+          fi
+          echo ""
+          echo "=== ~/.clasprc.json structure ==="
+          node -e "
+            const fs = require('fs');
+            const path = require('os').homedir() + '/.clasprc.json';
+            try {
+              const obj = JSON.parse(fs.readFileSync(path, 'utf8'));
+              console.log('parse: OK');
+              console.log('top-level keys:', JSON.stringify(Object.keys(obj)));
+              if (obj.token) {
+                console.log('token keys:', JSON.stringify(Object.keys(obj.token)));
+                console.log('has access_token:', !!obj.token.access_token);
+                console.log('has refresh_token:', !!obj.token.refresh_token);
+              }
+              if (obj.oauth2ClientSettings) {
+                console.log('oauth2ClientSettings keys:', JSON.stringify(Object.keys(obj.oauth2ClientSettings)));
+              }
+              console.log('isLocalCreds:', obj.isLocalCreds);
+            } catch (e) {
+              console.log('parse: FAIL', e.message);
+              const content = fs.readFileSync(path, 'utf8');
+              console.log('file first 30 chars:', JSON.stringify(content.substring(0, 30)));
+            }
+          "
+          echo ""
+          echo "=== clasp version on runner ==="
+          clasp --version
+
       - name: Execute Apps Script createQuizFormFromJson
         env:
           CLIENT_PAYLOAD: ${{ toJson(github.event.client_payload) }}
